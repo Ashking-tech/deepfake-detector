@@ -1,0 +1,25 @@
+# Image-only MVP, open weights only. Python 3.11 pinned in README;
+# local machine has 3.14.7 — torch wheels for 3.14 may lag, verify install.
+# Install: pip install -r requirements.txt
+
+# --- DL (open weights, HF/timm) ---
+torch>=2.3
+torchvision>=0.18
+timm>=0.9.16
+transformers>=4.41
+huggingface-hub>=0.23
+
+# --- Media + math ---
+opencv-python>=4.9
+Pillow>=10.3
+numpy>=1.26
+scipy>=1.13
+
+# --- C2PA (official, don't hand-roll crypto) ---
+c2pa-python>=1.0
+
+# --- Demo (single service first) ---
+gradio>=4.30
+
+# --- Tests ---
+pytest>=8.2

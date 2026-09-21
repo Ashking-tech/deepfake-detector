@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Model weights (GBs, from HF Hub on startup — never commit)
+weights/
+*.pt
+*.pth
+*.bin
+*.onnx
+*.safetensors
+
+# Media scratch / eval outputs
+eval/report/
+*.log
+*.jsonl
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
