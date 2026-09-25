@@ -14,5 +14,12 @@
   (simulates social re-encode).
 
 Pending for Phase 2 (NOT faked here):
-- `c2pa_valid_camera.jpg` / `c2pa_valid_ai.jpg` — will come from C2PA spec
-  test vectors or self-signed via `c2patool`. Never commit fake C2PA bytes.
+- `c2pa_valid_camera.jpg` / `c2pa_valid_ai.png` — DONE in Step 2, self-signed
+  with `tools/make_c2pa_fixtures.py` (throwaway self-signed ES256 cert,
+  generated fresh per run in a temp dir, key destroyed afterwards).
+  Camera fixture declares `c2pa.created` + `.../c2pa/captured`;
+  AI fixture declares `c2pa.created` + `.../c2pa/trainedAlgorithmicMedia`.
+  Both read back as validation_state "Valid" with the expected
+  (non-trusted, self-signed) `signingCredential.untrusted` code, which is
+  why the trust check stays OFF until Phase 8. Never commit fake C2PA bytes
+  (these are real signatures, just untrusted test keys).
