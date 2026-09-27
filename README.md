@@ -23,7 +23,7 @@ If one layer is defeated, the others still function. If evidence conflicts, DST 
 |----|-------------|----------------------|
 | FR-1 | Media ingestion (image-only) | Accept image (`jpg/png/webp`) via upload. Validate magic bytes + size cap, decode with OpenCV/Pillow, face-crop + resize/normalize. Video/audio/text deferred to v2. |
 | FR-2 | Provenance extraction (C2PA) | Use official `c2pa-python` (`Reader`) + `c2patool` for spot checks — do NOT hand-parse JUMBF/CBOR/COSE. Check `validation_state` + codes (`claimSignature.validated`, `assertion.dataHash.mismatch`, `signingCredential.trusted`) against trust anchors. Output mass `m1`. Missing manifest ≠ authentic → `m_uncert=1.0`. |
-| FR-3 | Watermark detection (open only) | Pluggable detector interface. MVP: open weights only — `HiDDeN` / `StegaStamp` decoder + simple DCT-DWT baseline. Park Gaussian Shading / InvisMark / SynthID behind interface (blocked: need attacker UNet / closed weights / text-API). Absent watermark → `m_auth=0.05, m_uncert=0.95`. |
+| FR-3 | Watermark detection (open only) | `WatermarkDetector` interface + registry (`dwtDct` default). MVP: `invisible-watermark` dwtDct (pip, no weights, 64-bit magic `DEPAUTH1`), BER-graded confidence via Step-1 `discount()`. Upgrade path: RivaGAN stub registered (fixes crop attacks, same interface). Parked: Gaussian Shading / InvisMark / SynthID / Stable Signature (each needs its own secret key or generator model — we detect OUR stamps only). Absent watermark → `m_auth=0.05, m_uncert=0.95`. |
 | FR-4 | Forensic analysis (image-only) | ConvNeXt-Tiny (`timm`, ImageNet) fine-tuned head + frozen DINOv3-S/B + linear probe (fallback DINOv2-B) + cheap FFT-magnitude branch + MTCNN face crop. Temperature-scaled confidence → mass `m3`. Must work with zero metadata. No video models in v1 (no R3D/BiLSTM/Transformer). |
 | FR-5 | DST fusion engine | Pure-NumPy Dempster combine, sequential `m1 ⊕ m2 ⊕ m3`, conflict `K`, source discounting, **Yager fallback: if `K>0.6` put conflict into ignorance → `Unknown`**. Deterministic, unit-tested on canonical vector in §2.3. |
 | FR-6 | Classification | Map fused mass to 1 of 4 statuses: `Verified AI Origin`, `Provenance Available`, `Suspicious`, `Unknown` (see §4.4). Return driving-signal provenance (which pillar decided). |
@@ -268,9 +268,11 @@ python -m app.api               # single demo service (Gradio or FastAPI)
 - `docs2.md` — pedagogical expansion + glossary. Its DST numbers match the canonical vector.
 - `Deepfake Research Paper Expansion-1.pdf` — full paper. Note: its `82.8%` fused claim is irreproducible — discarded.
 - `first draft-1.pdf` — early draft.
-- Open libs: `c2pa-python` / `c2patool`, `timm` (ConvNeXt), HuggingFace (DINOv3/DINOv2), HiDDeN/StegaStamp repos.
+- Open libs: `c2pa-python` / `c2patool`, `invisible-watermark` (dwtDct + RivaGAN upgrade), `timm` (ConvNeXt), HuggingFace (DINOv3/DINOv2).
 - Regulatory driver: EU AI Act Art. 50 (machine-readable AI marking from 2026-08-02, fines up to €15M / 3% turnover).
 
 ## 6. Limitations (v1 acknowledges)
 
 Image-only, open-weights only. Trust-list dependency, generalization gap on novel generators, purification can still force `Unknown` (by design — honest abstain over wrong guess). Video, audio, edge deployment deferred to v2.
+
+**Watermark pillar limits (measured, not guessed):** dwtDct passes JPEG/noise/brightness but FAILS crop and resize — under those attacks this pillar honestly reports absent and forensics must carry the verdict. RivaGAN (registered stub) fixes crop, nothing cheap fixes resize. We detect OUR stamps only: SynthID / InvisMark / Stable Signature each need their own secret key or generator model, which we don't have — parked as future work, and a good paper citation for the watermark-vs-forensics tradeoff.
