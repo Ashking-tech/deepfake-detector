@@ -1,22 +1,15 @@
-"""dwtDct detector: frequency-domain watermark reader (primary, Step 3).
+"""dwtDct detector: frequency-domain watermark reader (RETIRED, kept on record).
 
-Plain story: the magic bits are hidden in the image's frequency content
-(DWT + DCT coefficients), not in visible pixels. This reader reverses that:
-it recomputes the frequencies, reads 64 bits back out, and counts how many
-differ from our magic. Small differences = our code, survived some damage.
-~50% differences = random noise, nothing embedded.
-
-Library: `invisible-watermark` (pip, open). dwtDct needs NO deep weights
-and runs on CPU in ~100ms. NOTE: importing this module imports imwatermark,
-which imports torch (its rivaGan submodule needs it) — so torch must be
-INSTALLED to use this detector, even though dwtDct never runs it on GPU.
-Prefer CPU-only torch to keep the install small (see README quickstart).
-
-Known weakness (measured in the library's own docs): dwtDct FAILS on crop
-and resize, passes JPEG / noise / brightness. Under crop, this detector
-honestly reports absent (95% unsure) and forensics must carry the verdict.
-RivaGAN (rivagan_detector.py) fixes crop; Stable Signature is parked as
-future work because it needs the generator's key, which we don't have.
+STATUS 2026-09: MEASURED BROKEN in our dependency stack (opencv 5,
+numpy 2, PyWavelets 1.8 era; library is 2021 abandonware). Diagnosis:
+the decoder returns constant all-ones on EVERY input — watermarked,
+clean, even in-memory roundtrips (32/64 errors on alternating bits).
+Root cause: residue statistics of DWT approximation coefficients skew
+past the 0.5*scale decision line under the new cv2 YUV scaling, so the
+majority vote saturates at 1 and the channel carries zero information.
+RivaGAN (rivagan_detector.py) measured PERFECT on the same machine and
+is the default. This file stays registered so the failure is documented
+in code, not forgotten — do NOT make it default without re-measuring.
 """
 
 import cv2

@@ -16,6 +16,7 @@ Usage (inside .venv):
 
 import datetime
 import pathlib
+import sys
 import tempfile
 
 import c2pa

@@ -18,12 +18,13 @@ scipy>=1.13
 # --- C2PA (official, don't hand-roll crypto) ---
 c2pa-python>=1.0
 
-# --- Watermark (open, pip-installable; dwtDct needs no weights) ---
-# NOTE: invisible-watermark imports torch at module load (its bundled
-# rivaGan submodule), so torch must be INSTALLED even though dwtDct never
-# uses it. Prefer CPU-only torch to keep the download small:
+# --- Watermark (open, pip-installable; RivaGAN onnx weights bundled) ---
+# NOTE: invisible-watermark imports torch at module load (its rivaGan
+# submodule), so torch must be INSTALLED even for CPU-only use.
+# Prefer CPU-only torch to keep the download small:
 #   pip install torch --index-url https://download.pytorch.org/whl/cpu
 invisible-watermark>=0.2.0
+onnxruntime>=1.17
 
 # --- Demo (single service first) ---
 gradio>=4.30

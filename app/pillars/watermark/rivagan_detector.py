@@ -1,42 +1,120 @@
-"""RivaGAN detector stub: crop-robust upgrade path (Phase 3.5, NOT Step 3).
+"""RivaGAN detector: neural watermark reader (primary, Step 3).
 
-Why this file exists as a stub: the library's own measurements show
-dwtDct FAILS on crop attacks while RivaGAN PASSES them (crop 7x5 test).
-RivaGAN ships inside the same `invisible-watermark` pip package
-(onnx weights bundled, needs onnxruntime + torch), so enabling it later
-means implementing ONE class below and registering it — detect() and
-to_mass() in detect.py never change.
+Plain story: a small neural network (bundled inside the
+`invisible-watermark` pip package as onnx weights) reads 32 hidden bits out
+of any image. We compare those bits to our magic "DEPA". Close = our stamp
+survived. Far = nothing stamped here.
 
-Differences from dwtDct the implementer must respect:
-  1. RivaGAN reads exactly 32 bits, not 64 (the library raises otherwise).
-     Use a separate 32-bit magic: the first 4 ASCII bytes of our magic,
-     i.e. "DEPA" (32 bits), documented in detect.py as RIVAGAN_MAGIC.
-  2. Before first use, call WatermarkDecoder.loadModel() once (loads the
-     bundled onnx encoder/decoder into memory).
-  3. Encoder side: WatermarkEncoder().set_watermark('bits', bits32), then
-     .encode(bgr, 'rivaGan'). Slower than dwtDct (~1s vs ~70ms at 600px),
-     so keep it behind the registry, not as default.
+Why RivaGAN and not dwtDct (the original plan): dwtDct was measured BROKEN
+in our dependency stack (opencv 5 / numpy 2 era) — its decoder returns
+constant all-ones on every input, watermarked or not, so it carries zero
+information (see dct_detector.py for the diagnosis). RivaGAN was measured
+PERFECT on the same machine: BER 0.0 lossless, 0.0 after JPEG q95, 0.0
+after JPEG q60, 0.0 after 50% center-crop, ~0.41 on clean images (random,
+as a working blind decoder should output). Bonus: it also fixes dwtDct's
+crop weakness.
 
-Stable Signature (Meta) is deliberately NOT this file: it answers "did
-THIS SPECIFIC generator make this image?" and needs that generator's key,
-which we don't have. See README §6.
+Needs: invisible-watermark + onnxruntime + torch installed, any CPU.
+The onnx models ship inside the pip package (loadModel finds them).
 """
+
+import cv2
+
+from imwatermark import WatermarkDecoder
 
 from .base import WatermarkDetector, WatermarkResult
 
+# Largest bit error rate that still counts as "found".
+# Reasoning: random garbage decodes to BER ~0.5 (std ~0.09 over 32 bits),
+# so BER <= 0.15 is essentially impossible by chance (~1 in 50k), while
+# real damage measured so far (JPEG q60, 50% crop) costs ZERO bits.
+MAX_BER_FOR_FOUND = 0.15
 
-# Placeholder for the future RivaGAN reader. Registered in detect.py so
-# get_detector("rivaGan") resolves, but calling detect() fails loudly with
-# instructions instead of silently pretending to work.
+# RivaGAN reads exactly 32 bits per image (the library raises otherwise).
+# This must match the magic our fixture tool embeds (RIVAGAN magic).
+PAYLOAD_BITS = 32
+
+# Tracks whether the bundled onnx models are loaded (once per process).
+_models_loaded = False
+
+
+# Neural reader for our 32-bit magic, via invisible-watermark's RivaGAN.
 class RivaGanDetector(WatermarkDetector):
-    """32-bit neural watermark reader (not implemented yet)."""
+    """Reads our magic with the RivaGAN onnx decoder."""
 
     name = "rivaGan"
-    payload_bits = 32
+    payload_bits = PAYLOAD_BITS
 
+    # Builds a decoder for 32-bit payloads and loads bundled onnx models.
+    def __init__(self, expected_bits):
+        """Store our magic bits and load models (first build pays ~seconds).
+
+        expected_bits: list of 32 ints (0/1), e.g. RIVAGAN "DEPA" bits.
+        """
+        if len(expected_bits) != PAYLOAD_BITS:
+            raise ValueError(
+                f"expected {PAYLOAD_BITS} magic bits, got {len(expected_bits)}"
+            )
+        expected_copy = list(expected_bits)
+        self.expected = expected_copy
+        self._load_models_once()
+        self.decoder = WatermarkDecoder("bits", PAYLOAD_BITS)
+
+    # Loads the bundled onnx encoder/decoder exactly once per process.
+    @classmethod
+    def _load_models_once(cls):
+        """Call WatermarkDecoder.loadModel() on first use only."""
+        global _models_loaded
+        if _models_loaded:
+            return
+        WatermarkDecoder.loadModel()
+        _models_loaded = True
+
+    # Decodes the image and counts mismatches against our magic.
     def detect(self, path) -> WatermarkResult:
-        """Always raises: implement per the module docstring first."""
-        raise NotImplementedError(
-            "RivaGAN detector not implemented yet (Phase 3.5). "
-            "See rivagan_detector.py module docstring for the recipe."
+        """Decode path with RivaGAN, return found + BER. Never raises."""
+        # Step 1: load pixels. The library wants a BGR numpy array.
+        image = cv2.imread(str(path))
+        if image is None:
+            return WatermarkResult(
+                found=False,
+                ber=1.0,
+                reason=f"could not read image: {path}",
+                detector=self.name,
+            )
+
+        # Step 2: decode 32 raw bits out of the image.
+        try:
+            raw_bits = self.decoder.decode(image, "rivaGan")
+        except Exception as exc:
+            return WatermarkResult(
+                found=False,
+                ber=1.0,
+                reason=f"rivaGan decode failed: {exc}",
+                detector=self.name,
+            )
+
+        # Step 3: count mismatches against our magic, one bit at a time.
+        decoded = [int(bit) % 2 for bit in raw_bits]
+        mismatches = 0
+        for got, want in zip(decoded, self.expected):
+            if got != want:
+                mismatches = mismatches + 1
+        ber = mismatches / PAYLOAD_BITS
+
+        # Step 4: close enough counts as found (allows for damage).
+        if ber <= MAX_BER_FOR_FOUND:
+            return WatermarkResult(
+                found=True,
+                ber=ber,
+                reason=f"magic matched with {mismatches}/32 bit errors",
+                detector=self.name,
+            )
+
+        # Step 5: ~40-50% errors means random noise, nothing embedded.
+        return WatermarkResult(
+            found=False,
+            ber=ber,
+            reason=f"BER {ber:.2f} looks like random noise, no watermark",
+            detector=self.name,
         )

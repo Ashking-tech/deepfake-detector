@@ -23,3 +23,22 @@ Pending for Phase 2 (NOT faked here):
   (non-trusted, self-signed) `signingCredential.untrusted` code, which is
   why the trust check stays OFF until Phase 8. Never commit fake C2PA bytes
   (these are real signatures, just untrusted test keys).
+
+## Step 3 watermark fixtures (RivaGAN, `tools/make_watermark_fixtures.py`)
+
+- `wm_ai_01.jpg` — from `real_01.jpg`, 32-bit magic "DEPA" embedded,
+  saved JPEG q=95. Decodes BER 0.0.
+- `wm_ai_01_jpg60.jpg` — the stamped pixels re-saved at JPEG q=60.
+  Decodes BER 0.0 (RivaGAN is JPEG-proof at this level).
+- `wm_ai_02.png` — from `real_02.png` (NOT synthetic_01: measured 2026-09,
+  our procedural checkerboard defeats the RivaGAN decoder itself, BER 0.47
+  even in-memory — extreme local contrast breaks it; natural photos decode
+  at 0.0). The synthetic placeholder stays unstamped as a no-stamp control
+  until Phase 7 replaces it with a real SD sample.
+- `wm_ai_01_rot30.jpg` — stamped pixels rotated 30°. Decodes BER ~0.28
+  (above the 0.15 gate) → honest absent. Kill-demo: rotation destroys
+  neural watermarks, and the checker must say "unsure", never positive.
+
+Retired: dwtDct was the original plan but measured broken in our stack
+(opencv 5 / numpy 2 era, 2021 library): constant all-ones output on every
+input, zero information. Kept in-tree with the diagnosis, never default.
