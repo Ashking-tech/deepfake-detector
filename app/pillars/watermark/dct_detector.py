@@ -10,6 +10,21 @@ majority vote saturates at 1 and the channel carries zero information.
 RivaGAN (rivagan_detector.py) measured PERFECT on the same machine and
 is the default. This file stays registered so the failure is documented
 in code, not forgotten — do NOT make it default without re-measuring.
+
+How it was SUPPOSED to work (kept for the record): the magic bits hide
+in frequency content (DWT + DCT coefficients), not visible pixels. The
+reader recomputes the frequencies, reads 64 bits back out, and counts
+mismatches vs our magic — small differences = our code survived damage,
+~50% = random noise, nothing embedded. Blind: needs only the image +
+expected length, never the original.
+
+NOTE: importing this module imports imwatermark, which imports torch
+(via its rivaGan submodule) — torch must be INSTALLED to use it.
+Prefer CPU-only torch (see README quickstart).
+
+Stable Signature (Meta) is deliberately NOT our replacement: it answers
+"did THIS SPECIFIC generator make this image?" and needs that
+generator's key, which we don't have. See README §6.
 """
 
 import cv2
