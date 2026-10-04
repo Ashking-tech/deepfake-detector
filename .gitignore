@@ -20,6 +20,7 @@ weights/
 
 # Media scratch / eval outputs
 eval/report/
+eval/attacked/
 *.log
 *.jsonl
 
